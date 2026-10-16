@@ -1,0 +1,360 @@
+# ============================================================
+# AI Assistants
+# ============================================================
+
+# OpenAI Codex
+AGENTS.md
+**/AGENTS.md
+.codex/
+
+# Anthropic Claude Code
+CLAUDE.md
+**/CLAUDE.md
+.claude/
+.claude.json
+.claude.local.md
+**/CLAUDE.local.md
+
+# Cursor
+.cursor/
+.cursorrules
+
+# GitHub Copilot
+.github/copilot-instructions.md
+
+# Continue
+.continue/
+
+# Aider
+.aider*
+.aider.chat.history.md
+.aider.input.history
+
+# Other AI tools
+.windsurf/
+.windsurfrules
+.roo/
+.roomodes
+.cline/
+.clinerules/
+
+
+# ============================================================
+# Alternative package managers (Pixi and Conda are supported)
+# ============================================================
+
+# Nix / flakes / devenv
+*.nix
+flake.lock
+nix/
+.nix/
+.nix-*
+result
+result-*
+.direnv/
+.envrc
+devenv.yaml
+devenv.lock
+.devenv/
+
+# Guix
+manifest.scm
+channels.scm
+.guix-profile
+.guix-home/
+
+# Python: pip, pip-tools, Pipenv, Poetry, uv, PDM, Hatch and Rye
+# Keep pyproject.toml: Pixi can use it and it contains shared project metadata.
+requirements*.txt
+requirements*.in
+requirements/
+pip.conf
+pip.ini
+Pipfile
+Pipfile.lock
+poetry.lock
+poetry.toml
+uv.lock
+uv.toml
+.pdm-python
+.pdm-build/
+pdm.lock
+pdm.toml
+__pypackages__/
+hatch.toml
+.hatch/
+.rye/
+requirements.lock
+requirements-dev.lock
+
+# JavaScript: npm, Yarn, pnpm and Bun
+package.json
+package-lock.json
+npm-shrinkwrap.json
+yarn.lock
+pnpm-lock.yaml
+pnpm-workspace.yaml
+bun.lock
+bun.lockb
+.npmrc
+.yarnrc
+.yarnrc.yml
+.pnpmfile.cjs
+bunfig.toml
+node_modules/
+.npm/
+.yarn/
+.pnpm-store/
+
+# Other package manager manifests and lockfiles
+Gemfile
+Gemfile.lock
+.bundle/
+vendor/bundle/
+composer.json
+composer.lock
+Cargo.toml
+Cargo.lock
+rust-toolchain
+rust-toolchain.toml
+go.mod
+go.sum
+go.work
+go.work.sum
+pom.xml
+build.gradle
+build.gradle.kts
+settings.gradle
+settings.gradle.kts
+gradle.lockfile
+.gradle/
+Brewfile
+Brewfile.lock.json
+
+# Alternative environment/version managers
+.tool-versions
+mise.toml
+mise.lock
+.mise.toml
+
+
+# ============================================================
+# Python
+# ============================================================
+
+# Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Package builds
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Test and coverage caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# Type checking and linting
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Python tooling
+.python-version
+pip-wheel-metadata/
+
+
+# ============================================================
+# Data and Datasets
+# ============================================================
+
+data/
+datasets/
+raw_data/
+processed_data/
+external_data/
+
+# Common dataset formats
+*.parquet
+*.arrow
+*.feather
+*.h5
+*.hdf5
+*.zarr
+*.tfrecord
+*.lmdb
+
+# Medical imaging / Whole Slide Images
+*.svs
+*.ndpi
+*.mrxs
+*.scn
+*.bif
+*.ome.tif
+*.ome.tiff
+*.dcm
+*.dicom
+
+# Note: CSV, JSON, PNG, TIFF and ordinary images are
+# intentionally NOT globally ignored.
+# They may contain configurations, fixtures or documentation.
+
+
+# ============================================================
+# Machine Learning
+# ============================================================
+
+# Model weights and checkpoints
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.h5model
+
+# Training outputs
+checkpoints/
+weights/
+models/
+runs/
+outputs/
+artifacts/
+predictions/
+
+# Experiment tracking
+wandb/
+mlruns/
+mlartifacts/
+lightning_logs/
+tensorboard/
+
+# TensorBoard event files
+events.out.tfevents.*
+
+# Generated embeddings
+embeddings/
+features/
+
+
+# ============================================================
+# Logs and Temporary Files
+# ============================================================
+
+logs/
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+tmp/
+temp/
+.cache/
+
+
+# ============================================================
+# Environment Variables and Secrets
+# ============================================================
+
+.env
+.env.*
+!.env.example
+!.env.template
+
+*.pem
+*.key
+*.p12
+*.pfx
+
+secrets/
+credentials/
+credentials.json
+
+
+# ============================================================
+# IDEs and Editors
+# ============================================================
+
+# VS Code
+.vscode/
+.history/
+
+# JetBrains
+.idea/
+*.iml
+
+# Zed
+.zed/
+
+# Vim
+*.swn
+Session.vim
+
+
+# ============================================================
+# Operating Systems
+# ============================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+.directory
+
+
+# ============================================================
+# Local Development
+# ============================================================
+
+# Local configuration overrides
+*.local
+*.local.json
+*.local.yaml
+*.local.yml
+*.local.toml
+
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Profiling
+*.prof
+*.pstats
+
+# Core dumps
+core
+core.*
