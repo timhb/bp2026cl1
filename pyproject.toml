@@ -1,0 +1,46 @@
+
+# --- Python package metadata ---
+# Identifies this repository when installed into the environment.
+[project]
+name = "bp2026cl1"
+version = "0.1.0"
+requires-python = ">=3.14,<3.15"
+
+# --- Python build backend ---
+# Setuptools prepares the package for installation, including editable installs.
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+# --- Pixi environment ---
+[tool.pixi.workspace]
+name = "bp2026cl1"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.pypi-dependencies]
+bp2026cl1 = { path = ".", editable = true }
+
+# --- Development tasks ---
+[tool.pixi.tasks]
+lint = { cmd = "ruff check .", description = "Check Python code for lint violations." }
+lint-fix = { cmd = "ruff check --fix .", description = "Apply safe automatic lint fixes." }
+format = { cmd = "ruff format .", description = "Format Python code." }
+format-check = { cmd = "ruff format --check .", description = "Check formatting without changes." }
+check = { depends-on = ["lint", "format-check"], description = "Run lint and formatting checks." }
+
+[tool.pixi.dependencies]
+python = "3.14.*"
+ruff = ">=0.17.1,<0.18"
+
+# --- Ruff ---
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E4", "E7", "E9",  # Basic Python style and error checks
+    "F",               # Undefined names, unused imports, and related errors
+    "I",               # Consistent import sorting
+    "B",               # Additional checks for common programming mistakes
+]
