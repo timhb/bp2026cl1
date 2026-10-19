@@ -4,6 +4,7 @@
 [project]
 name = "bp2026cl1"
 version = "0.1.0"
+requires-python = ">=3.14,<3.15"
 
 # --- Python build backend ---
 # Setuptools prepares the package for installation, including editable installs.
@@ -29,6 +30,7 @@ format-check = { cmd = "ruff format --check .", description = "Check formatting 
 check = { depends-on = ["lint", "format-check"], description = "Run lint and formatting checks." }
 
 [tool.pixi.dependencies]
+python = "3.14.*"
 ruff = ">=0.17.1,<0.18"
 
 # --- Ruff ---

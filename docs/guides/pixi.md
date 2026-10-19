@@ -110,8 +110,7 @@ Replace `PACKAGE` with the package name. Choose the appropriate source:
 
 These commands update the dependency declarations and lockfile. Prefer them
 over installing packages manually inside the environment. Update
-`docs/dependencies.md` with the package's purpose and alternative names.
-Record significant dependency decisions in `docs/decisions.md`.
+`docs/dependencies.md` with the package's purpose.
 See the [dependency command reference](https://pixi.prefix.dev/latest/reference/cli/pixi/add/).
 
 ## 6. Using Pixi on the cluster
