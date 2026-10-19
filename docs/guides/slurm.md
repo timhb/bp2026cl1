@@ -1,4 +1,4 @@
-# Using Slurm on the cluster
+# Using Slurm on the cluster - DISCLAIMER: WIP SLOP
 
 Always pass our project account: `-A sci-lippert-bp2026cl1`.
 
