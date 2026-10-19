@@ -1,5 +1,6 @@
-# --- Pixi environment ---
-/.pixi/
+# --- Pixi environment (a directory rule would block the config.toml exception) ---
+/.pixi/*
+!/.pixi/config.toml
 
 # --- Python bytecode and package builds ---
 __pycache__/
@@ -16,10 +17,9 @@ __pycache__/
 htmlcov/
 .ipynb_checkpoints/
 
-# --- Downloaded and processed datasets ---
-/data/raw/
-/data/processed/
-/data/external/
+# --- Data: never committed ---
+/data/*
+!/data/.gitkeep
 
 # --- Generated ML outputs ---
 /outputs/
@@ -37,6 +37,3 @@ htmlcov/
 *.local.toml
 *.local.yaml
 *.local.yml
-# pixi environments
-.pixi/*
-!.pixi/config.toml

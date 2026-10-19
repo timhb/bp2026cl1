@@ -1,8 +1,2 @@
-# --- Pixi lockfile ---
-#   GitHub display settings & conflict handling for the generated lockfile
-#
-# merge=binary:             Report conflicting changes instead of merging file contents.
-# linguist-language=YAML:   Use YAML syntax highlighting on GitHub.
-# linguist-generated=true:  Collapse GitHub diffs by default and exclude from language statistics.
-# -diff:                    Treat the file as binary for Git diffs, suppressing textual patches.
-pixi.lock merge=binary linguist-language=YAML linguist-generated=true -diff
+# Generated lockfile: no line merging, collapsed in GitHub diffs, but still diffable
+pixi.lock merge=binary linguist-language=YAML linguist-generated=true

@@ -26,9 +26,8 @@ environment setup, daily commands, dependency changes, and cluster cache warning
 
 ### Dependency changes
 
-- Document each dependency's purpose and potential alternatives in
-  [docs/dependencies.md](docs/dependencies.md).
-- Record significant tooling decisions in [docs/decisions.md](docs/decisions.md).
+- Document each dependency's purpose in [docs/dependencies.md](docs/dependencies.md).
+- Keep conventions current in [docs/rules.md](docs/rules.md).
 
 ## Training environment
 
