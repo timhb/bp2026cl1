@@ -94,6 +94,7 @@
       <option value="ic">Immediate cause of death (DeCoDe)</option>
       <option value="any">Any condition in causal chain</option>
       <option value="tac">TAC pathogen positive</option>
+      <option value="pathology">Pathology categories</option>
     </select></div>
   <div class="ctl"><label for="scope">Cases</label>
     <select id="scope"><option value="all">All CHAMPS cases</option><option value="slides">Only cases with slides here</option></select></div>
@@ -157,15 +158,31 @@ function fit() {
 }
 const px = (ll, off) => { const p = st.tf.apply(projection(ll)); return off ? [p[0] + off[0], p[1] + off[1]] : p; };
 
+let loadVersion = 0;
 async function load() {
+  const version = ++loadVersion;
+  st.data = null;
+  gMarks.selectAll('*').remove();
+  $('#legend').innerHTML = '';
+  $('#side').innerHTML = '';
+  hideTip();
   $('#status').textContent = 'Loading…';
-  const r = await (await fetch(`api/disease_map?measure=${st.measure}&scope=${st.scope}`)).json();
-  if (!r.ready) { $('#status').textContent = r.error ? 'Clinical tables failed to load: ' + r.error : 'Clinical tables are loading (about 20 s after start)…'; if (!r.error) setTimeout(load, 3000); return; }
+  let r;
+  try {
+    const response = await fetch(`api/disease_map?measure=${st.measure}&scope=${st.scope}`);
+    if (!response.ok) throw new Error(`Server returned ${response.status}. Restart the viewer if it was recently updated.`);
+    r = await response.json();
+  } catch (error) {
+    if (version === loadVersion) $('#status').textContent = 'Could not load map: ' + error.message;
+    return;
+  }
+  if (version !== loadVersion) return;
+  if (!r.ready) { $('#status').textContent = r.error ? 'Clinical tables failed to load: ' + r.error : 'Clinical tables are loading (about 20 s after start)…'; if (!r.error) setTimeout(() => { if (version === loadVersion) load(); }, 3000); return; }
   st.data = r;
   if (!r.diseases.some(d => d[0] === st.disease)) st.disease = '';
   $('#disease').innerHTML = `<option value="">All cases</option>` +
     r.diseases.map(([d, n]) => `<option value="${esc(d)}"${d === st.disease ? ' selected' : ''}>${esc(d)} (${n.toLocaleString()})</option>`).join('');
-  const unit = st.measure === 'tac' ? 'cases with TAC results' : 'cases with DeCoDe results';
+  const unit = st.measure === 'pathology' ? 'cases with labeled pathology findings' : st.measure === 'tac' ? 'cases with TAC results' : 'cases with DeCoDe results';
   $('#status').textContent = `${r.n_cases.toLocaleString()} ${unit} · ${r.diseases.length} categories · ${Object.keys(r.sites).length} sites (country level)`;
   render();
 }
@@ -183,7 +200,7 @@ function siteValue(code, disease) {
 const total = () => st.data.n_cases;
 const radius = n => R_ALL * Math.sqrt(n / total());   // area ∝ share of all tracked cases
 
-function render() { drawLegend(); drawMarks(); drawSide(); }
+function render() { if (!st.data) return; drawLegend(); drawMarks(); drawSide(); }
 
 function drawMarks() {
   if (!st.data) return;
@@ -251,17 +268,20 @@ function drawLegend() {
       <svg width="${w}" height="${h}" aria-hidden="true">${rings}</svg>`;
   } else {
     const { top, color } = categories();
-    L.innerHTML = `<h3>Disease mix per site · top ${top.length}</h3>` + [...top, 'Other'].map(d =>
+    const pathology = st.measure === 'pathology';
+    const labels = pathology ? top : [...top, 'Other'];
+    L.innerHTML = `<h3>${pathology ? 'Pathology categories per site · ' + top.length + ' categories' : 'Disease mix per site · top ' + top.length}</h3>` + labels.map(d =>
       `<div class="row${d === 'Other' ? '' : ' click'}" data-d="${esc(d)}"><span class="sw" style="background:${d === 'Other' ? css('--other') : color(d)}"></span><span>${esc(d)}</span></div>`).join('') +
       pieKey() +
-      `<div class="note">Pie size is the site's total cases on a log scale. Slices show each site's own mix.${st.measure === 'any' || st.measure === 'tac' ? ' A case can count in several slices.' : ''} Click a category to see it as circles.</div>`;
+      `<div class="note">Pie size is the site's total cases on a log scale. Slices show each site's own mix.${st.measure === 'any' || st.measure === 'tac' || pathology ? ' A case can count in several slices.' : ''} Click a category to see it as circles.</div>`;
     L.querySelectorAll('.row.click').forEach(r => r.onclick = () => { st.disease = r.dataset.d; $('#disease').value = st.disease; setView('circles'); });
   }
 }
 
 function pieKey() {
   const maxN = d3.max(Object.values(st.data.sites), s => s.n);
-  const refs = [10, 100, 1000].filter(n => n <= maxN * 1.5);
+  if (!maxN) return '';
+  const refs = [1, 10, 100, 1000].filter(n => n <= maxN * 1.5);
   // nested circles sharing a bottom edge, labels on leader lines to the right (fits the legend width)
   const rs = refs.map(pieRadius), rMax = d3.max(rs), h = 2 * rMax + 10, w = 2 * rMax + 50;
   const parts = refs.map((n, i) => { const r = rs[i], top = h - 2 - 2 * r;
@@ -271,7 +291,7 @@ function pieKey() {
 
 // sites whose slides are in the image folder (folder name = country with underscores)
 const SLIDE_SITES = new Set(['BD', 'ET', 'KE', 'ML', 'MZ', 'SL', 'ZA']);
-const MEASURE_LABEL = { uc: 'Underlying cause', ic: 'Immediate cause', any: 'Any condition', tac: 'TAC positive' };
+const MEASURE_LABEL = { uc: 'Underlying cause', ic: 'Immediate cause', any: 'Any condition', tac: 'TAC positive', pathology: 'Pathology category' };
 function slideButton(code) {
   if (!SLIDE_SITES.has(code)) return '<div class="note">No slides from this site in the image folder.</div>';
   const d = st.view === 'circles' ? st.disease : '';

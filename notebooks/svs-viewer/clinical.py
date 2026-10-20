@@ -7,12 +7,14 @@ slide folder  BDAA00125                      (study_id)
 slide file stem -> slide_labels.parquet slide_id  (organ / semantic labels)
 """
 
-import html
 import os
 import re
 import threading
 
 import pandas as pd
+from pathology import CONDITIONS, slide_finding_index
+from reports import REPORT_FIELDS, format_mits_report
+from reports import clean_report_text as _clean_text
 
 PATHS = {}  # set by configure(): root, l2 (Level-2 tables), reports
 state = {"ready": False, "error": None}
@@ -74,25 +76,14 @@ def _read(path, **kw):
     )
 
 
-def _clean_text(s):
-    """CPL report text: HTML fragments + Excel '_x000D_' -> plain text with line breaks."""
-    if not isinstance(s, str):
-        return ""
-
-    s = s.replace("_x000D_", "")
-    s = re.sub(r"(?i)<br\s*/?>|</div>|</p>|</li>|</tr>", "\n", s)
-    s = re.sub(r"<[^>]+>", "", s)
-    s = html.unescape(s).replace("\xa0", " ")
-    s = re.sub(r"[ \t]+\n", "\n", s)
-    return re.sub(r"\n{3,}", "\n\n", s).strip()
-
-
 def _by_deid(df, cols=None):
     """Group rows by champs_deid; tables with several rows per case keep them as a list."""
     out = {}
     for rec in df.to_dict("records"):
         rec = {k: (v if isinstance(v, str) else None) for k, v in rec.items()}
         key = rec.pop("champs_deid")
+        if not key or not key.strip():
+            continue
         if cols:
             rec = {c: rec.get(c) for c in cols}
         out.setdefault(key, []).append(rec)
@@ -131,16 +122,29 @@ def _load_lookups():
 def _load_ids_and_slide_labels():
     """study_id -> champs_deid from the mapping CSV, filled in from slide_labels where missing."""
     m = _read(f"{PATHS['root']}/champs_deid_studyid_mapping.csv")
-    study2deid = dict(zip(m.study_id, m.champs_deid, strict=True))
+    study2deid = {
+        sid: did
+        for sid, did in zip(m.study_id, m.champs_deid, strict=True)
+        if isinstance(sid, str) and sid.strip() and isinstance(did, str) and did.strip()
+    }
 
     sl = pd.read_parquet(f"{PATHS['reports']}/derived/slide_labels.parquet")
     pairs = sl[["study_id", "champs_deid"]].drop_duplicates().itertuples(index=False)
     for sid, did in pairs:
-        if isinstance(did, str) and did and sid not in study2deid:
+        if (
+            isinstance(sid, str)
+            and sid.strip()
+            and isinstance(did, str)
+            and did.strip()
+            and sid not in study2deid
+        ):
             study2deid[sid] = did
     D["study2deid"] = study2deid
 
     sl = sl.where(pd.notna(sl), None)
+    D["slide_findings"] = slide_finding_index(
+        sl[["wsi_path", "organ", "semantic_groups"]].to_dict("records"), PATHS["root"]
+    )
     records = sl[SLIDE_LABEL_COLS].to_dict("records")
     D["slide_labels"] = {(r["study_id"], r["slide_id"]): r for r in records}
 
@@ -322,11 +326,53 @@ def _case_tables(deid):
         "adequacy": D["adequacy"].get(deid),
         "pigment": D["pigment"].get(deid),
         "sources": D.get("sources"),
+        "mits_reports": _mits_reports(deid),
     }
 
     for key in ("IHC", "SpecialStains", "PCR"):
         out["cpl_" + key] = _dedupe_report(D["cpl_" + key].get(deid, [])) or None
     return out
+
+
+def _mits_reports(deid):
+    """Keep narrative variants from every export, merging only identical shared text."""
+    reports = {}
+    for key in CPL_PREFIXES:
+        source = D.get("sources", {}).get("cpl_" + key, key)
+        for row in D["cpl_" + key].get(deid, []):
+            identity = tuple(_clean_text(row.get(field)) for field in REPORT_FIELDS)
+            if not any(identity[1:]):
+                continue
+            if identity not in reports:
+                reports[identity] = format_mits_report(row) | {
+                    "sources": [],
+                    "field_sources": {field: [] for field in REPORT_FIELDS},
+                }
+            report = reports[identity]
+            if source not in report["sources"]:
+                report["sources"].append(source)
+            for field, value in zip(REPORT_FIELDS, identity, strict=True):
+                if value and source not in report["field_sources"][field]:
+                    report["field_sources"][field].append(source)
+    # Ancillary exports repeat the narrative without HEText. Merge this repetition only
+    # when exactly one microscopy variant has the same specimen, diagnosis and comments.
+    for identity in list(reports):
+        if identity[2]:
+            continue
+        matches = [
+            key
+            for key in reports
+            if key[2] and (key[0], key[1], key[3]) == (identity[0], identity[1], identity[3])
+        ]
+        if len(matches) != 1:
+            continue
+        repeated, target = reports.pop(identity), reports[matches[0]]
+        target["sources"] = list(dict.fromkeys(target["sources"] + repeated["sources"]))
+        for field in REPORT_FIELDS:
+            target["field_sources"][field] = list(
+                dict.fromkeys(target["field_sources"][field] + repeated["field_sources"][field])
+            )
+    return list(reports.values())
 
 
 def case_data(case, filename=None):
@@ -342,6 +388,23 @@ def case_data(case, filename=None):
     if deid:
         out.update(_case_tables(deid))
     return out
+
+
+def pathology_exports():
+    """All records from each loaded source, including repeated specimen/test context."""
+    return [
+        {
+            "title": title,
+            "source": D["sources"]["cpl_" + key],
+            "cases": D["cpl_" + key],
+        }
+        for key, title in (
+            ("Diagnosis", "Pathology diagnosis"),
+            ("IHC", "Immunohistochemistry"),
+            ("SpecialStains", "Special stains"),
+            ("PCR", "PCR"),
+        )
+    ]
 
 
 # ---------------------------------------------------------------- disease map
@@ -383,14 +446,18 @@ def case_diseases(deid, measure):
     return None
 
 
-def _count_sites(measure, deids):
+def _count_sites(measure, deids, pathology):
     sites = {}
     for deid, demo in D["basic_demographics"].items():
         if deids is not None and deid not in deids:
             continue
 
         site = demo.get("site_iso_code")
-        diseases = case_diseases(deid, measure)
+        diseases = (
+            (pathology.get(deid) or None)
+            if measure == "pathology"
+            else case_diseases(deid, measure)
+        )
         if not site or diseases is None:
             continue
 
@@ -401,11 +468,11 @@ def _count_sites(measure, deids):
     return sites
 
 
-def disease_map(measure="uc", deids=None):
+def disease_map(measure="uc", deids=None, pathology=None):
     """Per-site case counts by disease. deids restricts to a set of cases (e.g. those with slides)."""
-    sites = _count_sites(measure, deids)
+    sites = _count_sites(measure, deids, pathology or {})
 
-    totals = {}
+    totals = {label: 0 for label, _ in CONDITIONS.values()} if measure == "pathology" else {}
     for s in sites.values():
         for d, n in s["counts"].items():
             totals[d] = totals.get(d, 0) + n

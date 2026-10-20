@@ -1,9 +1,9 @@
 """Read-only SVS whole-slide image browser. Start with `pixi run viewer`.
 
-Only *reads* .svs files under data_root (configs/svs_viewer.toml). Nothing in data_root is
-ever written, moved or deleted. The only file this tool writes is its slide index cache
-(index_file in the config, under the gitignored data/processed/). Case-level CSV/parquet
-tables are read into memory by clinical.py.
+Only *reads* .svs files under data_root (notebooks/svs-viewer/configs/svs_viewer.toml). Nothing in data_root is
+ever written, moved or deleted. The viewer writes only its slide index cache under the
+gitignored data/processed/. The glossary build script creates a separate public-vocabulary
+cache there. Case-level CSV/parquet tables are read into memory by clinical.py.
 """
 
 import argparse
@@ -20,11 +20,13 @@ from functools import lru_cache
 import clinical
 import openslide
 from flask import Flask, abort, jsonify, request, send_file, send_from_directory
+from glossary import MedicalGlossary
 from openslide.deepzoom import DeepZoomGenerator
+from pathology import CONDITIONS, case_catalog, case_key, case_summary
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
-DEFAULT_CONFIG = os.path.join(REPO_ROOT, "configs", "svs_viewer.toml")
+DEFAULT_CONFIG = os.path.join(HERE, "configs", "svs_viewer.toml")
 TILE_SIZE = 254  # Deep Zoom tile edge in pixels; 254 + 2 * OVERLAP = 256
 OVERLAP = 1
 
@@ -191,6 +193,162 @@ def disease_map_page():
     return send_from_directory(HERE, "map.html")
 
 
+@app.route("/pathology")
+def pathology_page():
+    return send_from_directory(HERE, "pathology.html")
+
+
+@app.route("/glossary.js")
+def glossary_script():
+    return send_from_directory(HERE, "glossary.js")
+
+
+@app.route("/reference-images/<path:filename>")
+def reference_image(filename):
+    return send_from_directory(os.path.join(HERE, "reference-images"), filename)
+
+
+@lru_cache(maxsize=1)
+def _load_glossary(path):
+    with open(path) as handle:
+        return MedicalGlossary(json.load(handle))
+
+
+def _glossary():
+    path = config.get("glossary_file", "data/processed/svs-viewer/mesh.json")
+    if not os.path.isabs(path):
+        path = os.path.join(REPO_ROOT, path)
+    try:
+        return _load_glossary(path)
+    except FileNotFoundError:
+        abort(
+            503,
+            description="Medical glossary is not installed. Run pixi run python notebooks/svs-viewer/build_medical_glossary.py.",
+        )
+
+
+@app.route("/api/glossary/status")
+def glossary_status():
+    glossary = _glossary()
+    return jsonify(
+        **glossary.metadata, concepts=len(glossary.records), aliases=glossary.alias_count
+    )
+
+
+@app.route("/api/glossary/entry/<uid>")
+def glossary_entry(uid):
+    glossary = _glossary()
+    if uid not in glossary.records:
+        abort(404)
+    return jsonify(glossary.entry(uid))
+
+
+@app.route("/api/glossary/search")
+def glossary_search():
+    query = request.args.get("q", "").strip()
+    if len(query) > 120:
+        abort(400)
+    return jsonify(items=_glossary().search(query))
+
+
+@app.route("/api/glossary/matches", methods=["POST"])
+def glossary_matches():
+    data = request.get_json(silent=True)
+    texts = data.get("texts") if isinstance(data, dict) else None
+    if (
+        not isinstance(texts, list)
+        or len(texts) > 200
+        or any(not isinstance(text, str) or len(text) > 30000 for text in texts)
+        or sum(map(len, texts)) > 200000
+    ):
+        abort(400)
+    return jsonify(matches=[_glossary().matches(text) for text in texts])
+
+
+def _pathology_cases():
+    enrich()
+    return case_catalog(
+        index["files"],
+        clinical.D["study2deid"],
+        clinical.pathology_exports(),
+        clinical.D.get("basic_demographics", {}),
+        clinical.D.get("slide_findings", {}),
+    )
+
+
+def _pathology_diseases():
+    return {c["deid"]: set(c["conditions"]) for c in _pathology_cases().values() if c["deid"]}
+
+
+def _pathology_pending():
+    if not index["ready"] or not clinical.state["ready"]:
+        return jsonify(ready=False, error=clinical.state["error"])
+    return None
+
+
+@app.route("/api/pathology/cases")
+def pathology_cases():
+    pending = _pathology_pending()
+    if pending is not None:
+        return pending
+    terms = request.args.get("q", "").lower().split()
+    condition = request.args.get("condition", "")
+    conditions = [label for label, _ in CONDITIONS.values()]
+    has_slides = request.args.get("slides", "")
+    if condition not in ("", *conditions) or has_slides not in ("", "yes", "no"):
+        abort(400)
+    cases = [case_summary(c) for c in _pathology_cases().values()]
+    countries = sorted({country for c in cases for country in c["countries"]})
+    country = request.args.get("country")
+    cases = [
+        c
+        for c in cases
+        if (not country or country in c["countries"])
+        and (not condition or condition in c["conditions"])
+        and (not has_slides or bool(c["slide_count"]) == (has_slides == "yes"))
+    ]
+    cases = sorted(cases, key=lambda c: (c["case_id"], c["key"]))
+    cases = [c for c in cases if all(t in json.dumps(c).lower() for t in terms)]
+    try:
+        offset = max(0, int(request.args.get("offset", 0)))
+        limit = max(1, min(200, int(request.args.get("limit", 100))))
+    except ValueError:
+        abort(400)
+    return jsonify(
+        ready=True,
+        total=len(cases),
+        items=cases[offset : offset + limit],
+        countries=countries,
+        conditions=conditions,
+    )
+
+
+@app.route("/api/pathology/case/<path:key>")
+def pathology_case(key):
+    pending = _pathology_pending()
+    if pending is not None:
+        return pending
+    if key.startswith("study:"):
+        key = case_key(key.removeprefix("study:"), clinical.D["study2deid"])
+    case = _pathology_cases().get(key)
+    if case is None:
+        abort(404)
+    # Clean markup for display, retaining every record and field (no deduplication).
+    reports = [
+        {
+            **r,
+            "records": [
+                {k: clinical._clean_text(v) for k, v in row.items()} for row in r["records"]
+            ],
+        }
+        for r in case["reports"]
+    ]
+    clinical_data = {"case": case["case_id"], "deid": case["deid"]}
+    if case["deid"]:
+        clinical_data.update(clinical._case_tables(case["deid"]))
+    return jsonify(ready=True, **(case | {"reports": reports, "clinical": clinical_data}))
+
+
 # ---------------------------------------------------------------- index API
 def enrich():
     """Attach organ / clinical-data flags to the index once the tables are loaded."""
@@ -226,10 +384,17 @@ def _filter_files(files, args):
 
     cause, measure = args.get("cause"), args.get("measure") or "uc"
     if cause and clinical.state["ready"]:
+        pathology = _pathology_diseases() if measure == "pathology" else {}
         files = [
             f
             for f in files
-            if f.get("deid") and cause in (clinical.case_diseases(f["deid"], measure) or ())
+            if f.get("deid")
+            and cause
+            in (
+                pathology.get(f["deid"], ())
+                if measure == "pathology"
+                else (clinical.case_diseases(f["deid"], measure) or ())
+            )
         ]
 
     terms = args.get("q", "").lower().split()
@@ -291,15 +456,22 @@ def disease_map_api():
         return jsonify(ready=False, error=clinical.state["error"])
 
     measure = request.args.get("measure", "uc")
-    if measure not in ("uc", "ic", "any", "tac"):
+    if measure not in ("uc", "ic", "any", "tac", "pathology"):
         abort(400)
+
+    pathology = None
+    if measure == "pathology":
+        pending = _pathology_pending()
+        if pending is not None:
+            return pending
+        pathology = _pathology_diseases()
 
     deids = None
     if request.args.get("scope") == "slides":
         cases = {f["case"] for f in index["files"]}
         study2deid = clinical.D["study2deid"]
         deids = {study2deid[c] for c in cases if c in study2deid}
-    return jsonify(ready=True, **clinical.disease_map(measure, deids))
+    return jsonify(ready=True, **clinical.disease_map(measure, deids, pathology))
 
 
 @app.route("/api/clinical/<path:rel>")

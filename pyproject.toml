@@ -29,7 +29,7 @@ format = { cmd = "ruff format .", description = "Format Python code." }
 format-check = { cmd = "ruff format --check .", description = "Check formatting without changes." }
 check = { depends-on = ["lint", "format-check"], description = "Run lint and formatting checks." }
 # Extra flags are passed through, e.g. `pixi run viewer --rescan` after new slides arrive.
-viewer = { cmd = "python notebooks/svs-viewer/app.py", description = "Start the read-only SVS viewer (settings in configs/svs_viewer.toml)." }
+viewer = { cmd = "python notebooks/svs-viewer/app.py", description = "Start the read-only SVS viewer (settings in notebooks/svs-viewer/configs/svs_viewer.toml)." }
 
 [tool.pixi.dependencies]
 python = "3.14.*"

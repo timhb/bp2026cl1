@@ -58,6 +58,6 @@ pixi run viewer --rescan   # re-scan the slide folder after new slides arrive
 ```
 
 Run it on a compute node and forward port 8765 (e.g. via VS Code's Ports panel). Paths and
-the port are set in [configs/svs_viewer.toml](configs/svs_viewer.toml). The first start scans
+the port are set in [notebooks/svs-viewer/configs/svs_viewer.toml](notebooks/svs-viewer/configs/svs_viewer.toml). The first start scans
 the slide folder and caches the list in `data/processed/svs-viewer/` (gitignored); case
 tables take about 20 seconds to load.
